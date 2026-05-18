@@ -26,30 +26,26 @@ the course workflow we need.
 
 ## Install
 
-Remove the old `{inspectdf}` first, then install this replacement from GitHub.
-`{pak}` is the simplest option here.
+Remove the old `{inspectdf}` first, then install this replacement from GitHub
+with `{pacman}`.
 
 ```r
 if ("inspectdf" %in% rownames(installed.packages())) {
   remove.packages("inspectdf")
 }
 
+pacman::p_install_gh("the-graph-courses/inspectdf")
+library(inspectdf)
+```
+
+If you prefer `{pak}`:
+
+```r
 if (!requireNamespace("pak", quietly = TRUE)) {
   install.packages("pak")
 }
 
 pak::pak("the-graph-courses/inspectdf")
-library(inspectdf)
-```
-
-If you prefer `{pacman}`, install from GitHub and then load `{inspectdf}`:
-
-```r
-if (!requireNamespace("pacman", quietly = TRUE)) {
-  install.packages("pacman")
-}
-
-pacman::p_install_gh("the-graph-courses/inspectdf")
 library(inspectdf)
 ```
 
