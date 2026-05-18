@@ -698,7 +698,7 @@ plot_cat_single <- function(x,
   subtitle <- if (any(is.na(plot_data$value))) "Gray segments are missing values" else NULL
 
   p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = factor(col_name, levels = rev(unique(col_name))), y = pcnt_plot, fill = fill_key)) +
-    ggplot2::geom_col(width = 0.72, color = "black", linewidth = 0.2) +
+    geom_col_outline(width = 0.72, color = "black", border_width = 0.2) +
     ggplot2::coord_flip() +
     ggplot2::scale_y_continuous(labels = percent_label, expand = ggplot2::expansion(mult = c(0, 0.02))) +
     ggplot2::scale_fill_manual(values = segment_fill) +
@@ -773,7 +773,7 @@ plot_cat_compare <- function(x,
   segment_fill <- shade_within_bars(plot_data$col_name2, plot_data$prop, plot_data$value, col_palette)
 
   p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = factor(bar_name, levels = bar_levels), y = pcnt_plot, fill = fill_key)) +
-    ggplot2::geom_col(width = 0.72, color = "black", linewidth = 0.2) +
+    geom_col_outline(width = 0.72, color = "black", border_width = 0.2) +
     ggplot2::coord_flip() +
     ggplot2::scale_y_continuous(labels = percent_label, expand = ggplot2::expansion(mult = c(0, 0.02))) +
     ggplot2::scale_fill_manual(values = segment_fill) +
@@ -822,10 +822,10 @@ plot_num_single <- function(x,
   )
 
   ggplot2::ggplot(plot_data) +
-    ggplot2::geom_rect(
+    geom_rect_outline(
       ggplot2::aes(xmin = lower, xmax = upper, ymin = 0, ymax = prop, fill = prop_z),
       color = "white",
-      linewidth = 0.2
+      border_width = 0.2
     ) +
     ggplot2::facet_wrap(stats::as.formula("~ col_name"), scales = "free_x", ncol = facet_ncol(plot_layout)) +
     ggplot2::scale_y_continuous(labels = percent_label, expand = ggplot2::expansion(mult = c(0, 0.12))) +
@@ -861,7 +861,7 @@ plot_num_compare <- function(x,
   plot_data$col_name <- paste0(plot_data$col_name, " (", sig[plot_data$col_name], ")")
 
   p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = dataset, y = bin, fill = prop)) +
-    ggplot2::geom_tile(color = "white", linewidth = 0.2) +
+    geom_tile_outline(color = "white", border_width = 0.2) +
     ggplot2::facet_wrap(stats::as.formula("~ col_name"), scales = "free_y", ncol = facet_ncol(plot_layout)) +
     ggplot2::scale_fill_gradient(low = "white", high = palette_pair(col_palette)[[2]], na.value = "gray85") +
     ggplot2::labs(x = NULL, y = NULL, fill = NULL, title = "Heat plot comparison of numeric columns") +
@@ -909,7 +909,7 @@ plot_num_grouped <- function(x,
   plot_data$label <- ifelse(is.na(plot_data$prop), NA_character_, sprintf("%.1f", plot_data$prop * 100))
 
   p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = group_label, y = bin, fill = prop)) +
-    ggplot2::geom_tile(color = "white", linewidth = 0.2) +
+    geom_tile_outline(color = "white", border_width = 0.2) +
     ggplot2::facet_wrap(stats::as.formula("~ col_name"), scales = "free_y", ncol = facet_ncol(plot_layout)) +
     ggplot2::scale_fill_gradient(low = "white", high = palette_pair(col_palette)[[2]], na.value = "gray85") +
     ggplot2::labs(x = NULL, y = NULL, fill = NULL) +
@@ -975,6 +975,26 @@ non_empty_name <- function(x, fallback) {
 bind_plot_parts <- function(index, fn) {
   parts <- lapply(index, fn)
   bind_tibbles(parts)
+}
+
+geom_col_outline <- function(..., border_width = 0.2) {
+  do.call(ggplot2::geom_col, c(list(...), line_width_arg(border_width)))
+}
+
+geom_rect_outline <- function(..., border_width = 0.2) {
+  do.call(ggplot2::geom_rect, c(list(...), line_width_arg(border_width)))
+}
+
+geom_tile_outline <- function(..., border_width = 0.2) {
+  do.call(ggplot2::geom_tile, c(list(...), line_width_arg(border_width)))
+}
+
+line_width_arg <- function(width) {
+  if (utils::packageVersion("ggplot2") >= "3.4.0") {
+    list(linewidth = width)
+  } else {
+    list(size = width)
+  }
 }
 
 empty_plot <- function(message) {
