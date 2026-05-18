@@ -1,5 +1,7 @@
 ^\\.git$
 ^\\.Rproj\\.user$
+^\\.DS_Store$
+^.*\\.DS_Store$
 ^\\.\\.Rcheck$
 ^.*\\.Rcheck$
 ^inspectdf_.*\\.tar\\.gz$
