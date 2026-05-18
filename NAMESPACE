@@ -1,0 +1,5 @@
+export(inspect_cat)
+export(inspect_num)
+export(show_plot)
+S3method(show_plot, inspect_cat)
+S3method(show_plot, inspect_num)

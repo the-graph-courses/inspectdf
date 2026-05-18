@@ -1,0 +1,5 @@
+^\\.git$
+^\\.Rproj\\.user$
+^\\.\\.Rcheck$
+^.*\\.Rcheck$
+^inspectdf_.*\\.tar\\.gz$
