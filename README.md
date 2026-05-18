@@ -7,9 +7,9 @@ Minimal replacement for the course functions used from `{inspectdf}`:
 - `show_plot(inspect_cat(...))`
 - `show_plot(inspect_num(...))`
 
-The GitHub repository is `the-graph-courses/inspectdf2`, but the installed R
-package is still named `{inspectdf}` so existing course code can keep using
-`library(inspectdf)` and `inspectdf::inspect_cat()`.
+The GitHub repository and installed R package are both named `{inspectdf}`, so
+existing course code can keep using `library(inspectdf)` and
+`inspectdf::inspect_cat()`.
 
 ## Why this exists
 
@@ -27,8 +27,7 @@ the course workflow we need.
 ## Install
 
 Remove the old `{inspectdf}` first, then install this replacement from GitHub.
-`{pak}` is the simplest option here because the GitHub repo is named
-`inspectdf2` while the installed package is named `{inspectdf}`.
+`{pak}` is the simplest option here.
 
 ```r
 if ("inspectdf" %in% rownames(installed.packages())) {
@@ -39,7 +38,7 @@ if (!requireNamespace("pak", quietly = TRUE)) {
   install.packages("pak")
 }
 
-pak::pak("the-graph-courses/inspectdf2")
+pak::pak("the-graph-courses/inspectdf")
 library(inspectdf)
 ```
 
@@ -50,7 +49,7 @@ if (!requireNamespace("pacman", quietly = TRUE)) {
   install.packages("pacman")
 }
 
-pacman::p_install_gh("the-graph-courses/inspectdf2")
+pacman::p_install_gh("the-graph-courses/inspectdf")
 library(inspectdf)
 ```
 
