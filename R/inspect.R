@@ -1,7 +1,9 @@
 utils::globalVariables(c(
-  "bar_name", "bin", "col_name", "dataset", "fill_key", "group_label",
-  "label", "lower", "mid", "pcnt_plot", "prop", "prop_z", "upper", "value",
-  "xmax", "xmin", "ymax"
+  "bar_name", "bin", "bottoms", "col_name", "dataset", "df", "df1_type",
+  "df2_type", "fill_key", "group_label", "has_issue", "label", "label_pos",
+  "lower", "mid", "pcnt", "pcnt_plot", "prop", "prop_z", "text_just",
+  "text_rotn", "tops", "type", "type_label", "upper", "value", "x", "xmax",
+  "xmin", "y", "ymax"
 ))
 
 inspect_cat <- function(df1, df2 = NULL, include_int = FALSE) {
@@ -46,12 +48,27 @@ inspect_num <- function(df1, df2 = NULL, breaks = 20, include_int = TRUE) {
   )
 }
 
+inspect_types <- function(df1, df2 = NULL, compare_index = FALSE) {
+  input_type <- check_df_cols(df1, df2)
+  df_names <- df_name_attrs(!is.null(df2))
+
+  if (input_type == "pair") {
+    out <- inspect_types_compare(df1, df2, compare_index = compare_index, df_names = df_names)
+  } else if (input_type == "grouped") {
+    out <- inspect_types_grouped(df1)
+  } else {
+    out <- inspect_types_single(df1)
+  }
+
+  new_inspect(out, "inspect_types", method = "types", input_type = input_type, df_names = df_names)
+}
+
 show_plot <- function(x, ...) {
   UseMethod("show_plot")
 }
 
 show_plot.default <- function(x, ...) {
-  stop("show_plot() expects output from inspect_cat() or inspect_num().", call. = FALSE)
+  stop("show_plot() expects output from inspect_cat(), inspect_num(), or inspect_types().", call. = FALSE)
 }
 
 show_plot.inspect_cat <- function(x,
@@ -134,6 +151,46 @@ show_plot.inspect_num <- function(x,
     col_palette = col_palette,
     plot_layout = plot_layout,
     alpha = alpha
+  )
+}
+
+show_plot.inspect_types <- function(x,
+                                    text_labels = TRUE,
+                                    label_size = NULL,
+                                    label_color = NULL,
+                                    col_palette = 0,
+                                    plot_type = 1,
+                                    plot_layout = NULL,
+                                    ...) {
+  input_type <- attr(x, "type")$input_type
+  if (identical(input_type, "pair")) {
+    return(plot_types_pair(
+      x,
+      text_labels = text_labels,
+      label_size = label_size,
+      label_color = label_color,
+      col_palette = col_palette,
+      plot_type = plot_type
+    ))
+  }
+  if (identical(input_type, "grouped")) {
+    return(plot_types_grouped(
+      x,
+      text_labels = text_labels,
+      label_size = label_size,
+      label_color = label_color,
+      col_palette = col_palette,
+      plot_layout = plot_layout
+    ))
+  }
+
+  plot_types_single(
+    x,
+    text_labels = text_labels,
+    label_size = label_size,
+    label_color = label_color,
+    col_palette = col_palette,
+    plot_type = plot_type
   )
 }
 
@@ -423,6 +480,153 @@ inspect_num_compare <- function(df1, df2, breaks = 20, include_int = TRUE) {
   group_lengths <- tibble::tibble(name = c("df1", "df2"), rows = c(nrow(df1), nrow(df2)))
 
   list(out = out, brks_list = brks_list, inspected = inspected, group_lengths = group_lengths)
+}
+
+inspect_types_single <- function(df1) {
+  df1 <- as.data.frame(df1)
+  ncl <- ncol(df1)
+  if (ncl == 0) {
+    return(empty_types_summary())
+  }
+  classes <- vapply(df1, function(x) paste(class(x), collapse = " "), character(1))
+  nms_cls <- data.frame(
+    pos = seq_len(ncl),
+    nms = names(df1),
+    cls = classes,
+    stringsAsFactors = FALSE
+  )
+  nms_cls <- nms_cls[order(nms_cls$cls), , drop = FALSE]
+  nms_lst <- split(nms_cls, nms_cls$cls)
+  nms_lst <- lapply(nms_lst, function(v) {
+    out <- v$nms
+    names(out) <- as.character(v$pos)
+    out
+  })
+  types <- table(classes)
+  out <- tibble::tibble(
+    type = names(types),
+    cnt = as.integer(types),
+    pcnt = as.numeric(types) * 100 / ncl,
+    col_name = unname(nms_lst[names(types)])
+  )
+  out[order(-out$pcnt, out$type), , drop = FALSE]
+}
+
+inspect_types_grouped <- function(df1) {
+  groups <- grouped_keys_and_rows(df1)
+  group_vars <- names(groups$keys)
+  data_cols <- setdiff(names(df1), group_vars)
+  df_plain <- as.data.frame(df1)
+
+  parts <- lapply(seq_along(groups$rows), function(i) {
+    sub <- df_plain[groups$rows[[i]], data_cols, drop = FALSE]
+    out <- inspect_types_single(sub)
+    add_group_keys(out, groups$keys[i, , drop = FALSE])
+  })
+
+  out <- bind_tibbles(parts)
+  if (nrow(out) == 0) {
+    out <- grouped_empty(groups$keys, empty_types_summary())
+  }
+  order_by_first_group(out, group_vars)
+}
+
+inspect_types_compare <- function(df1, df2, compare_index = FALSE, df_names = df_name_attrs(TRUE)) {
+  s1 <- inspect_types_single(df1)
+  s2 <- inspect_types_single(df2)
+  types <- c(s1$type, setdiff(s2$type, s1$type))
+
+  col_1 <- lapply(types, function(tp) list_lookup(s1$col_name, s1$type, tp))
+  col_2 <- lapply(types, function(tp) list_lookup(s2$col_name, s2$type, tp))
+  names(col_1) <- types
+  names(col_2) <- types
+
+  cnt_1 <- vapply(col_1, length, integer(1))
+  cnt_2 <- vapply(col_2, length, integer(1))
+  columns <- mapply(
+    type_columns_pair,
+    x = col_1,
+    y = col_2,
+    MoreArgs = list(df_names = df_names),
+    SIMPLIFY = FALSE
+  )
+  equal <- mapply(type_columns_equal, col_1, col_2, MoreArgs = list(compare_index = compare_index))
+  issues <- type_issues(types, s1, s2, df_names)
+
+  tibble::tibble(
+    type = types,
+    equal = ifelse(equal, "\u2714", "\u2718"),
+    cnt_1 = as.integer(cnt_1),
+    cnt_2 = as.integer(cnt_2),
+    columns = columns,
+    issues = issues
+  )
+}
+
+empty_types_summary <- function() {
+  tibble::tibble(type = character(), cnt = integer(), pcnt = numeric(), col_name = list())
+}
+
+type_columns_pair <- function(x, y, df_names) {
+  part_1 <- if (is.null(x)) {
+    tibble::tibble(col_name = character(), data_arg = character())
+  } else {
+    tibble::tibble(col_name = unname(x), data_arg = df_names$df1)
+  }
+  part_2 <- if (is.null(y)) {
+    tibble::tibble(col_name = character(), data_arg = character())
+  } else {
+    tibble::tibble(col_name = unname(y), data_arg = df_names$df2)
+  }
+  bind_tibbles(list(part_1, part_2))
+}
+
+type_columns_equal <- function(x, y, compare_index = FALSE) {
+  if (is.null(x) || is.null(y)) {
+    return(FALSE)
+  }
+  if (compare_index) {
+    return(identical(x, y))
+  }
+  length(x) == length(y) && identical(sort(unname(x)), sort(unname(y)))
+}
+
+type_issues <- function(types, s1, s2, df_names) {
+  type_1 <- col_type_lookup(s1)
+  type_2 <- col_type_lookup(s2)
+  cols <- union(names(type_1), names(type_2))
+  by_type <- stats::setNames(vector("list", length(types)), types)
+
+  for (col in cols) {
+    lhs <- named_lookup(type_1, col)
+    rhs <- named_lookup(type_2, col)
+    if (is.null(lhs)) {
+      issue <- paste0(df_names$df2, "::", col, " ~ ", rhs, "  missing from ", df_names$df1)
+      by_type[[rhs]] <- c(by_type[[rhs]], stats::setNames(issue, col))
+    } else if (is.null(rhs)) {
+      issue <- paste0(df_names$df1, "::", col, " ~ ", lhs, "  missing from ", df_names$df2)
+      by_type[[lhs]] <- c(by_type[[lhs]], stats::setNames(issue, col))
+    } else if (!identical(lhs, rhs)) {
+      issue <- paste0(df_names$df1, "::", col, " ~ ", lhs, " <!> ", df_names$df2, "::", col, " ~ ", rhs)
+      by_type[[lhs]] <- c(by_type[[lhs]], stats::setNames(issue, col))
+      by_type[[rhs]] <- c(by_type[[rhs]], stats::setNames(issue, col))
+    }
+  }
+
+  unname(lapply(by_type, function(x) if (is.null(x)) character() else x))
+}
+
+named_lookup <- function(x, nm) {
+  if (nm %in% names(x)) unname(x[[nm]]) else NULL
+}
+
+col_type_lookup <- function(x) {
+  out <- character()
+  for (i in seq_len(nrow(x))) {
+    cols <- x$col_name[[i]]
+    out[unname(cols)] <- x$type[[i]]
+  }
+  out
 }
 
 breaks_for_col <- function(col, breaks) {
@@ -928,6 +1132,233 @@ plot_num_grouped <- function(x,
   }
 
   p
+}
+
+plot_types_single <- function(df_plot,
+                              text_labels = TRUE,
+                              col_palette = 0,
+                              label_color = NULL,
+                              label_size = NULL,
+                              plot_type = 1) {
+  column_layout <- expand_type_columns(df_plot)
+  if (nrow(column_layout) == 0) {
+    return(empty_plot("No column types to plot"))
+  }
+
+  column_layout <- radial_layout(column_layout)
+  types_layout <- type_radial_layout(column_layout)
+  type_cols <- stats::setNames(palette_for(col_palette, nrow(types_layout)), types_layout$type)
+
+  p <- ggplot2::ggplot(column_layout, ggplot2::aes(ymax = tops, ymin = bottoms, xmax = 4, xmin = 3, fill = type)) +
+    ggplot2::geom_rect() +
+    ggplot2::geom_rect(
+      ggplot2::aes(ymax = tops, ymin = bottoms, xmax = 3, xmin = -1, fill = type),
+      alpha = 0.7
+    ) +
+    ggplot2::scale_fill_manual(values = type_cols) +
+    ggplot2::coord_polar(theta = "y") +
+    ggplot2::xlim(c(-1, 8)) +
+    ggplot2::theme_void() +
+    ggplot2::theme(legend.position = "none")
+
+  if (text_labels) {
+    label_size <- if (is.null(label_size)) 4 else label_size
+    label_color <- if (is.null(label_color)) type_cols else label_color
+    p <- p +
+      ggplot2::geom_text(
+        x = 5,
+        ggplot2::aes(y = label_pos, label = col_name, color = type, hjust = text_just, angle = text_rotn),
+        size = label_size,
+        check_overlap = TRUE
+      ) +
+      ggplot2::geom_text(
+        x = 1.5,
+        data = types_layout,
+        ggplot2::aes(y = label_pos, label = type_label, hjust = text_just, angle = text_rotn),
+        inherit.aes = FALSE,
+        color = "white",
+        size = max(label_size - 1, 2)
+      ) +
+      ggplot2::scale_color_manual(values = label_color, na.value = "gray60")
+  }
+
+  p
+}
+
+plot_types_pair <- function(df_plot,
+                            text_labels = TRUE,
+                            col_palette = 0,
+                            label_color = NULL,
+                            label_size = NULL,
+                            plot_type = 1) {
+  df_names <- attr(df_plot, "df_names")
+  dataset_names <- c(non_empty_name(df_names$df1, "df1"), non_empty_name(df_names$df2, "df2"))
+  column_layout <- pair_type_layout(df_plot, dataset_names = dataset_names)
+  if (plot_type != 1) {
+    keep <- column_layout$df1_type != column_layout$df2_type |
+      is.na(column_layout$df1_type) |
+      is.na(column_layout$df2_type)
+    keep[is.na(keep)] <- TRUE
+    column_layout <- column_layout[keep, , drop = FALSE]
+  }
+  if (nrow(column_layout) == 0) {
+    return(empty_plot("No column type differences to plot"))
+  }
+
+  column_layout <- radial_layout(column_layout)
+  column_layout$has_issue <- ifelse(is.na(column_layout$issue), "No issue", "Issue")
+  type_order <- stats::na.omit(unique(c(column_layout$df1_type, column_layout$df2_type)))
+  col_types <- c(
+    stats::setNames(palette_for(col_palette, length(type_order)), type_order),
+    Missing = "gray60",
+    `No issue` = "white",
+    Issue = "tomato"
+  )
+  df_names_labels <- tibble::tibble(df = dataset_names, y = 1.04, x = c(2.5, 3.5))
+
+  p <- ggplot2::ggplot(
+    column_layout,
+    ggplot2::aes(ymax = tops, ymin = bottoms, xmax = 3, xmin = 2, fill = df1_type)
+  ) +
+    geom_rect_outline(color = "white", border_width = 0.06) +
+    geom_rect_outline(
+      ggplot2::aes(ymax = tops, ymin = bottoms, xmax = 4, xmin = 3, fill = df2_type),
+      alpha = 0.7,
+      color = "white",
+      border_width = 0.06
+    ) +
+    ggplot2::scale_fill_manual(values = col_types, na.value = "gray60") +
+    ggplot2::xlim(c(1, 5)) +
+    ggplot2::ylim(c(0, 1.05)) +
+    ggplot2::theme_void() +
+    ggplot2::theme(legend.position = "none")
+
+  if (text_labels) {
+    label_size <- if (is.null(label_size)) 4 else label_size
+    p <- p +
+      ggplot2::geom_text(
+        ggplot2::aes(y = label_pos, label = col_name, color = df1_type, hjust = "right", angle = 0),
+        x = 1.8,
+        size = label_size,
+        check_overlap = TRUE
+      ) +
+      ggplot2::geom_text(
+        ggplot2::aes(x = x, y = y, label = df),
+        data = df_names_labels,
+        hjust = "center",
+        vjust = "center",
+        angle = 0,
+        size = label_size,
+        color = "gray40",
+        inherit.aes = FALSE
+      ) +
+      ggplot2::geom_text(
+        data = column_layout[!is.na(column_layout$issue), , drop = FALSE],
+        ggplot2::aes(y = label_pos, label = "!", color = has_issue),
+        x = 4.2,
+        size = label_size + 1,
+        inherit.aes = FALSE
+      ) +
+      ggplot2::scale_color_manual(values = col_types, na.value = "gray60")
+  }
+
+  p
+}
+
+plot_types_grouped <- function(df_plot,
+                               text_labels = TRUE,
+                               col_palette = 0,
+                               label_color = NULL,
+                               label_size = NULL,
+                               plot_layout = NULL) {
+  group_vars <- setdiff(names(df_plot), names(empty_types_summary()))
+  if (length(group_vars) == 0 || nrow(df_plot) == 0) {
+    return(plot_types_single(df_plot, text_labels = text_labels, col_palette = col_palette, label_color = label_color, label_size = label_size))
+  }
+  plot_data <- df_plot
+  plot_data$group_label <- vapply(seq_len(nrow(df_plot)), function(i) group_label(df_plot[i, group_vars, drop = FALSE]), character(1))
+  type_cols <- stats::setNames(palette_for(col_palette, length(unique(plot_data$type))), unique(plot_data$type))
+
+  p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = group_label, y = pcnt, fill = type)) +
+    geom_col_outline(width = 0.72, color = "white", border_width = 0.2) +
+    ggplot2::scale_fill_manual(values = type_cols) +
+    ggplot2::scale_y_continuous(labels = percent_label, expand = ggplot2::expansion(mult = c(0, 0.04))) +
+    ggplot2::labs(x = NULL, y = "Percent of columns", fill = NULL) +
+    inspect_theme()
+
+  if (text_labels) {
+    label_size <- if (is.null(label_size)) 3 else label_size
+    label_color <- if (is.null(label_color)) "white" else label_color[[1]]
+    p <- p +
+      ggplot2::geom_text(
+        ggplot2::aes(label = paste0(type, "\n", round(pcnt), "%")),
+        position = ggplot2::position_stack(vjust = 0.5),
+        size = label_size,
+        color = label_color,
+        lineheight = 0.9,
+        check_overlap = TRUE
+      )
+  }
+
+  p
+}
+
+expand_type_columns <- function(df_plot) {
+  parts <- lapply(seq_len(nrow(df_plot)), function(i) {
+    cols <- df_plot$col_name[[i]]
+    if (is.null(cols) || length(cols) == 0) {
+      return(NULL)
+    }
+    tibble::tibble(type = df_plot$type[[i]], col_name = unname(cols))
+  })
+  bind_tibbles(parts)
+}
+
+pair_type_layout <- function(df_plot, dataset_names) {
+  type_1 <- character()
+  type_2 <- character()
+  for (i in seq_len(nrow(df_plot))) {
+    cols <- df_plot$columns[[i]]
+    if (nrow(cols) == 0) {
+      next
+    }
+    lhs <- cols$col_name[cols$data_arg == dataset_names[[1]]]
+    rhs <- cols$col_name[cols$data_arg == dataset_names[[2]]]
+    type_1[lhs] <- df_plot$type[[i]]
+    type_2[rhs] <- df_plot$type[[i]]
+  }
+  cols <- union(names(type_1), names(type_2))
+  issues <- unlist(df_plot$issues)
+  tibble::tibble(
+    col_name = cols,
+    df1_type = unname(type_1[cols]),
+    df2_type = unname(type_2[cols]),
+    issue = unname(issues[cols])
+  )
+}
+
+radial_layout <- function(x) {
+  n <- nrow(x)
+  x$ones <- 1
+  x$tops <- seq_len(n) / n
+  x$bottoms <- c(0, utils::head(x$tops, -1))
+  x$label_pos <- (x$tops + x$bottoms) / 2
+  x$text_just <- ifelse(x$label_pos > 0.5, "right", "left")
+  x$text_rotn <- ifelse(x$label_pos > 0.5, -1, 1) * 90 - (x$label_pos * 360)
+  x
+}
+
+type_radial_layout <- function(column_layout) {
+  types <- table(column_layout$type)
+  types <- sort(types, decreasing = TRUE)
+  out <- tibble::tibble(type = names(types), n = as.integer(types))
+  out$tops <- cumsum(out$n) / sum(out$n)
+  out$bottoms <- c(0, utils::head(out$tops, -1))
+  out$label_pos <- (out$tops + out$bottoms) / 2
+  out$text_just <- "center"
+  out$text_rotn <- ifelse(out$label_pos > 0.5, -1, 1) * 90 - (out$label_pos * 360)
+  out$type_label <- ifelse(out$label_pos > 0.5, paste0(out$type, " (", out$n, ")"), paste0("(", out$n, ") ", out$type))
+  out
 }
 
 hist_to_rects <- function(hist, breaks, col_name) {

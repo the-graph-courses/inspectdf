@@ -4,8 +4,8 @@ Version: 0.0.1
 Authors@R: person("The Graph Courses", email = "hello@thegraphcourses.org", role = c("aut", "cre"))
 Author: The Graph Courses
 Maintainer: The Graph Courses <hello@thegraphcourses.org>
-Description: Minimal replacement for the inspect_cat(), inspect_num(), and
-    show_plot() course workflow from inspectdf.
+Description: Minimal replacement for the inspect_cat(), inspect_num(),
+    inspect_types(), and show_plot() course workflow from inspectdf.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

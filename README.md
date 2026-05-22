@@ -4,8 +4,10 @@ Minimal replacement for the course functions used from `{inspectdf}`:
 
 - `inspect_cat()`
 - `inspect_num()`
+- `inspect_types()`
 - `show_plot(inspect_cat(...))`
 - `show_plot(inspect_num(...))`
+- `show_plot(inspect_types(...))`
 
 The GitHub repository and installed R package are both named `{inspectdf}`, so
 existing course code can keep using `library(inspectdf)` and
@@ -56,6 +58,9 @@ inspect_cat(iris) |>
   show_plot()
 
 inspect_num(iris) |>
+  show_plot()
+
+inspect_types(iris) |>
   show_plot()
 ```
 
